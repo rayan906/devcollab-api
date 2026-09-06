@@ -6,13 +6,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class WorkspaceMemberResponse {
+public class WorkspaceMemberResponse  implements Serializable {
     private String userId;
     private String name;
     private String email;

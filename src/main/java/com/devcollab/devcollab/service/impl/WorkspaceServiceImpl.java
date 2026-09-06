@@ -6,11 +6,14 @@ import com.devcollab.devcollab.dto.response.WorkspaceMemberResponse;
 import com.devcollab.devcollab.dto.response.WorkspaceResponse;
 import com.devcollab.devcollab.entity.*;
 import com.devcollab.devcollab.repository.*;
+import com.devcollab.devcollab.service.EmailService;
 import com.devcollab.devcollab.service.WorkspaceService;
 import com.devcollab.devcollab.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.util.List;
 
@@ -22,7 +25,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
-
+    private final EmailService emailService;
     @Override
     @Transactional
     public WorkspaceResponse createWorkspace(WorkspaceRequest request) {
@@ -57,6 +60,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     }
 
     @Override
+    @Cacheable(value = "workspaces", key = "#workspaceId")
     public WorkspaceResponse getWorkspace(String workspaceId) {
         Workspace workspace = getWorkspaceAndVerifyMember(workspaceId);
         return mapToResponse(workspace);
@@ -64,6 +68,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "workspaces", key = "#workspaceId")
     public WorkspaceResponse updateWorkspace(String workspaceId, WorkspaceRequest request) {
         Workspace workspace = getWorkspaceAndVerifyMember(workspaceId);
         verifyAdminOrOwner(workspaceId);
@@ -76,6 +81,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "workspaces", key = "#workspaceId")
     public void deleteWorkspace(String workspaceId) {
         Workspace workspace = getWorkspaceAndVerifyMember(workspaceId);
         verifyOwner(workspaceId);
@@ -108,6 +114,13 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .build();
 
         WorkspaceMember saved = workspaceMemberRepository.save(member);
+        User currentUser = securityUtil.getCurrentUser();
+        emailService.sendWorkspaceInviteEmail(
+                invitedUser.getEmail(),
+                invitedUser.getName(),
+                workspace.getName(),
+                currentUser.getName()
+        );
         return mapMemberToResponse(saved);
     }
 

@@ -7,6 +7,7 @@ import com.devcollab.devcollab.dto.response.CommentResponse;
 import com.devcollab.devcollab.dto.response.TaskResponse;
 import com.devcollab.devcollab.entity.*;
 import com.devcollab.devcollab.repository.*;
+import com.devcollab.devcollab.service.EmailService;
 import com.devcollab.devcollab.service.TaskService;
 import com.devcollab.devcollab.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class TaskServiceImpl implements TaskService {
     private final UserRepository userRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final SecurityUtil securityUtil;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -58,6 +60,15 @@ public class TaskServiceImpl implements TaskService {
         Task saved = taskRepository.save(builder.build());
 
         logActivity(saved, currentUser, "TASK_CREATED", null, saved.getTitle());
+
+        if (request.getAssigneeId() != null && saved.getAssignee() != null) {
+            emailService.sendTaskAssignedEmail(
+                    saved.getAssignee().getEmail(),
+                    saved.getAssignee().getName(),
+                    saved.getTitle(),
+                    project.getName()
+            );
+        }
 
         return mapToResponse(saved);
     }
@@ -125,6 +136,12 @@ public class TaskServiceImpl implements TaskService {
             logActivity(task, currentUser, "ASSIGNEE_CHANGED",
                     oldAssigneeName, newAssignee.getName());
             task.setAssignee(newAssignee);
+            emailService.sendTaskAssignedEmail(
+                    newAssignee.getEmail(),
+                    newAssignee.getName(),
+                    task.getTitle(),
+                    task.getProject().getName()
+            );
         }
 
         if (request.getTitle() != null) task.setTitle(request.getTitle());
@@ -156,7 +173,15 @@ public class TaskServiceImpl implements TaskService {
                 .build();
 
         Comment saved = commentRepository.save(comment);
-
+        if (!task.getReporter().getId().equals(currentUser.getId())) {
+            emailService.sendCommentNotificationEmail(
+                    task.getReporter().getEmail(),
+                    task.getReporter().getName(),
+                    task.getTitle(),
+                    currentUser.getName(),
+                    request.getContent()
+            );
+        }
         logActivity(task, currentUser, "COMMENT_ADDED", null, request.getContent());
 
         return mapCommentToResponse(saved);
